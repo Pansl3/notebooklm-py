@@ -616,7 +616,16 @@ async def _fetch_tokens_with_jar(
             follow_redirects=True,
             timeout=30.0,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (401, 403):
+                raise ValueError(
+                    "Authentication expired or invalid. "
+                    f"HTTP {exc.response.status_code} from NotebookLM.\n"
+                    "Run 'notebooklm login' to re-authenticate."
+                ) from exc
+            raise
 
         final_url = str(response.url)
 
