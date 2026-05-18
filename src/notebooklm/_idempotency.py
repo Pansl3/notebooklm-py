@@ -573,9 +573,8 @@ IDEMPOTENCY_REGISTRY.register(
         "forces the inner retry loop off so a 5xx after server-side "
         "generation does not trigger a fresh LLM inference whose result "
         "may diverge from the first (lost) response. The persisted-note "
-        "side of the mind-map chain (CREATE_NOTE / UPDATE_NOTE in "
-        "_mind_map.create_note) remains UNCLASSIFIED and is the subject "
-        "of a follow-up classification task."
+        "side of the mind-map chain (CREATE_NOTE = NON_IDEMPOTENT_NO_RETRY; "
+        "UPDATE_NOTE = IDEMPOTENT_SET_OP) is classified below."
     ),
 )
 
@@ -704,6 +703,83 @@ IDEMPOTENCY_REGISTRY.register(
         "identity-bearing, so the wrapper captures source-id baseline before "
         "the create and filters probe matches to new sources only"
     ),
+)
+
+
+# ----------------------------------------------------------------------------
+# Wave 2 classifications — note update/delete + rename/settings family
+# ----------------------------------------------------------------------------
+#
+# The follow-up classification called out in the GENERATE_MIND_MAP entry:
+# UPDATE_NOTE and DELETE_NOTE are the persisted-write side of the mind-map
+# CREATE_NOTE → UPDATE_NOTE chain; CREATE_NOTE is already classified
+# NON_IDEMPOTENT_NO_RETRY. The remaining entries cover rename and settings
+# RPCs whose set-op semantics are equivalent to the already-classified delete
+# family.
+#
+# UPDATE_NOTE
+#   Sets content + title on an existing, server-allocated note_id. The
+#   note_id is known before the call — no new resource is allocated and no
+#   email side effects occur. A duplicate UPDATE_NOTE after a 5xx / network
+#   failure overwrites the same row with the same content/title, leaving an
+#   identical final state. IDEMPOTENT_SET_OP.
+#
+# DELETE_NOTE
+#   Soft-deletes a note row. Same set-op semantics as DELETE_NOTEBOOK /
+#   DELETE_SOURCE / DELETE_ARTIFACT: a duplicate delete after a 5xx yields
+#   the same final state (row is soft-deleted). IDEMPOTENT_SET_OP.
+#
+# RENAME_NOTEBOOK / RENAME_ARTIFACT / UPDATE_SOURCE (source rename)
+#   Pure name/title updates on existing resources. A duplicate rename after
+#   a 5xx sets the same name again — idempotent. IDEMPOTENT_SET_OP.
+#
+# REMOVE_RECENTLY_VIEWED
+#   Removes a notebook ID from the user's recently-viewed list. Replaying
+#   the request after a 5xx is a no-op (the notebook is already absent).
+#   IDEMPOTENT_SET_OP.
+#
+# SET_USER_SETTINGS
+#   Sets user preferences (e.g. output language). Replaying the same write
+#   after a 5xx yields the same stored preference. IDEMPOTENT_SET_OP.
+
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.UPDATE_NOTE,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes=(
+        "overwrite of an existing note row (content + title); note_id is "
+        "known before the call — no resource allocation, no email side "
+        "effects. Duplicate UPDATE_NOTE after 5xx leaves identical final state."
+    ),
+)
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.DELETE_NOTE,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes="soft-delete is idempotent (set-op semantics, same as DELETE_NOTEBOOK/SOURCE/ARTIFACT)",
+)
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.RENAME_NOTEBOOK,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes="name update; replaying after 5xx sets the same name — idempotent set-op",
+)
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.RENAME_ARTIFACT,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes="name update; replaying after 5xx sets the same name — idempotent set-op",
+)
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.UPDATE_SOURCE,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes="source title update; replaying after 5xx sets the same title — idempotent set-op",
+)
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.REMOVE_RECENTLY_VIEWED,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes="removal from recently-viewed list; replaying after 5xx is a no-op (already absent)",
+)
+IDEMPOTENCY_REGISTRY.register(
+    RPCMethod.SET_USER_SETTINGS,
+    IdempotencyPolicy.IDEMPOTENT_SET_OP,
+    notes="user preference write (e.g. output language); replaying sets the same value — idempotent",
 )
 
 

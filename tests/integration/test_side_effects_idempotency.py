@@ -132,6 +132,63 @@ def test_share_notebook_classified_probe_then_create() -> None:
     assert entry.policy is IdempotencyPolicy.PROBE_THEN_CREATE
 
 
+# ---------------------------------------------------------------------------
+# Wave 2 — note update/delete + rename/settings family (IDEMPOTENT_SET_OP)
+# ---------------------------------------------------------------------------
+
+
+def test_update_note_classified_idempotent_set_op() -> None:
+    """``UPDATE_NOTE`` is an idempotent set-op.
+
+    The note_id is known before the call — no resource is allocated and a
+    duplicate UPDATE_NOTE after a 5xx overwrites the same row with the same
+    content/title (identical final state).
+    """
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.UPDATE_NOTE)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+    assert entry.notes
+
+
+def test_delete_note_classified_idempotent_set_op() -> None:
+    """``DELETE_NOTE`` is an idempotent set-op (soft-delete, same semantics as
+    DELETE_NOTEBOOK / DELETE_SOURCE / DELETE_ARTIFACT)."""
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.DELETE_NOTE)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+
+
+def test_rename_notebook_classified_idempotent_set_op() -> None:
+    """``RENAME_NOTEBOOK`` is an idempotent set-op — replaying the rename sets
+    the same name again."""
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.RENAME_NOTEBOOK)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+
+
+def test_rename_artifact_classified_idempotent_set_op() -> None:
+    """``RENAME_ARTIFACT`` is an idempotent set-op."""
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.RENAME_ARTIFACT)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+
+
+def test_update_source_classified_idempotent_set_op() -> None:
+    """``UPDATE_SOURCE`` (source title rename) is an idempotent set-op."""
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.UPDATE_SOURCE)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+
+
+def test_remove_recently_viewed_classified_idempotent_set_op() -> None:
+    """``REMOVE_RECENTLY_VIEWED`` is an idempotent set-op — replaying the
+    removal is a no-op when the notebook is already absent from the list."""
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.REMOVE_RECENTLY_VIEWED)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+
+
+def test_set_user_settings_classified_idempotent_set_op() -> None:
+    """``SET_USER_SETTINGS`` is an idempotent set-op — replaying the write sets
+    the same preference value."""
+    entry = IDEMPOTENCY_REGISTRY.get_entry(RPCMethod.SET_USER_SETTINGS)
+    assert entry.policy is IdempotencyPolicy.IDEMPOTENT_SET_OP
+
+
 # ===========================================================================
 # Delete RPCs keep today's retry behavior (IDEMPOTENT_SET_OP is silent)
 # ===========================================================================
