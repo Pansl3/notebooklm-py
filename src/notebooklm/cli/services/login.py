@@ -721,7 +721,7 @@ def _write_extracted_cookies(
     except ValueError as e:
         logger.warning("Extracted cookies for %s failed verification: %s", email, e)
         console.print(f"    [yellow]Warning: cookies for {email} failed verification.[/yellow]")
-    except httpx.RequestError as e:
+    except httpx.HTTPError as e:
         logger.warning("Could not verify cookies for %s: %s", email, e)
         console.print(
             f"    [yellow]Warning: could not verify cookies for {email} (network).[/yellow]"
